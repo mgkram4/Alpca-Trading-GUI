@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpaca Trading Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .container { display: flex; flex-wrap: wrap; }
+        .section { flex: 1; min-width: 300px; margin: 10px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        h2 { margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        input, select { margin-bottom: 10px; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Alpaca Trading Dashboard</h1>
+    
+    <div class="container">
+        <div class="section">
+            <h2>Account Information</h2>
+            <div id="account-info"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Submit Order</h2>
+            <form id="order-form">
+                <label for="symbol">Symbol:</label>
+                <input type="text" id="symbol" required><br>
+                <label for="quantity">Quantity:</label>
+                <input type="number" id="quantity" required><br>
+                <label for="side">Side:</label>
+                <select id="side" required>
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                </select><br>
+                <button type="submit">Submit Order</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>Orders</h2>
+            <div id="orders"></div>
+        </div>
+
+        <div class="section">
+            <h2>Positions</h2>
+            <div id="positions"></div>
+        </div>
+
+        <div class="section">
+            <h2>Real-time Data</h2>
+            <div id="real-time-data"></div>
+        </div>
+    </div>
+
+    <script>
+        function updateAccountInfo() {
+            axios.get('/account_info')
+                .then(response => {
+                    const data = response.data;
+                    document.getElementById('account-info').innerHTML = `
+                        <p>Buying Power: $${parseFloat(data.buying_power).toFixed(2)}</p>
+                        <p>Cash: $${parseFloat(data.cash).toFixed(2)}</p>
+                        <p>Portfolio Value: $${parseFloat(data.portfolio_value).toFixed(2)}</p>
+                    `;
+                })
+                .catch(error => console.error('Error fetching account info:', error));
+        }
+
+        function updateOrders() {
+            axios.get('/orders')
+                .then(response => {
+                    const orders = response.data;
+                    let ordersHtml = '<table><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Status</th><th>Action</th></tr>';
+                    orders.forEach(order => {
+                        ordersHtml += `
+                            <tr>
+                                <td>${order.symbol}</td>
+                                <td>${order.side}</td>
+                                <td>${order.qty}</td>
+                                <td>${order.status}</td>
+                                <td><button onclick="cancelOrder('${order.id}')">Cancel</button></td>
+                            </tr>
+                        `;
+                    });
+                    ordersHtml += '</table>';
+                    document.getElementById('orders').innerHTML = ordersHtml;
+                })
+                .catch(error => console.error('Error fetching orders:', error));
+        }
+
+        function updatePositions() {
+            axios.get('/positions')
+                .then(response => {
+                    const positions = response.data;
+                    let positionsHtml = '<table><tr><th>Symbol</th><th>Qty</th><th>Market Value</th><th>Unrealized P/L</th></tr>';
+                    positions.forEach(position => {
+                        positionsHtml += `
+                            <tr>
+                                <td>${position.symbol}</td>
+                                <td>${position.qty}</td>
+                                <td>$${parseFloat(position.market_value).toFixed(2)}</td>
+                                <td>$${parseFloat(position.unrealized_pl).toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                    positionsHtml += '</table>';
+                    document.getElementById('positions').innerHTML = positionsHtml;
+                })
+                .catch(error => console.error('Error fetching positions:', error));
+        }
+
+        document.getElementById('order-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const orderData = {
+                symbol: document.getElementById('symbol').value,
+                quantity: document.getElementById('quantity').value,
+                side: document.getElementById('side').value
+            };
+            axios.post('/submit_order', orderData)
+                .then(response => {
+                    alert('Order submitted successfully');
+                    updateOrders();
+                })
+                .catch(error => console.error('Error submitting order:', error));
+        });
+
+        function cancelOrder(orderId) {
+            axios.post(`/cancel_order/${orderId}`)
+                .then(response => {
+                    alert('Order cancelled successfully');
+                    updateOrders();
+                })
+                .catch(error => console.error('Error cancelling order:', error));
+        }
+
+        function updateRealTimeData() {
+            axios.get('/real_time_data')
+                .then(response => {
+                    const data = response.data;
+                    let realTimeHtml = '<h3>Stocks</h3><table><tr><th>Symbol</th><th>Ask Price</th><th>Bid Price</th></tr>';
+                    for (const [symbol, quote] of Object.entries(data.stocks)) {
+                        realTimeHtml += `
+                            <tr>
+                                <td>${symbol}</td>
+                                <td>$${parseFloat(quote.ask_price).toFixed(2)}</td>
+                                <td>$${parseFloat(quote.bid_price).toFixed(2)}</td>
+                            </tr>
+                        `;
+                    }
+                    realTimeHtml += '</table><h3>Crypto</h3><table><tr><th>Symbol</th><th>Ask Price</th><th>Bid Price</th></tr>';
+                    for (const [symbol, quote] of Object.entries(data.crypto)) {
+                        realTimeHtml += `
+                            <tr>
+                                <td>${symbol}</td>
+                                <td>$${parseFloat(quote.ask_price).toFixed(2)}</td>
+                                <td>$${parseFloat(quote.bid_price).toFixed(2)}</td>
+                            </tr>
+                        `;
+                    }
+                    realTimeHtml += '</table>';
+                    document.getElementById('real-time-data').innerHTML = realTimeHtml;
+                })
+                .catch(error => console.error('Error fetching real-time data:', error));
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial calls to populate the dashboard
+            updateAccountInfo();
+            updateOrders();
+            updatePositions();
+            updateRealTimeData();
+
+            // Set intervals for periodic updates
+            setInterval(updateAccountInfo, 60000); // Update every minute
+            setInterval(updateOrders, 30000); // Update every 30 seconds
+            setInterval(updatePositions, 30000); // Update every 30 seconds
+            setInterval(updateRealTimeData, 5000); // Update every 5 seconds
+        });
+    </script>
+</body>
+</html>
